@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://panelxy.github.io/sitemap.xml
