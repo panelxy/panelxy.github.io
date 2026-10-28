@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cable Sizer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #181c27; --surface2: #1e2330;
+    --border: rgba(255,255,255,0.08); --border-active: rgba(99,179,237,0.5);
+    --text: #e8eaf0; --text-muted: #7a8499; --text-dim: #4a5268;
+    --accent: #63b3ed; --accent-dim: rgba(99,179,237,0.12);
+    --green: #68d391; --green-dim: rgba(104,211,145,0.12);
+    --amber: #f6ad55; --amber-dim: rgba(246,173,85,0.12);
+    --red: #fc8181; --red-dim: rgba(252,129,129,0.12);
+    --purple: #b794f4; --purple-dim: rgba(183,148,244,0.12);
+    --radius: 8px; --radius-lg: 12px;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.6; min-height: 100vh; }
+  header { border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; background: var(--surface); }
+  .logo { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: 3px 8px; border-radius: 4px; }
+  header h1 { font-size: 15px; font-weight: 500; color: var(--text); }
+  header span { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+  .mode-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.75rem 2rem; display: flex; gap: 8px; }
+  .mode-btn { padding: 6px 20px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 13px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .mode-btn.active-motor { background: var(--accent-dim); color: var(--accent); border-color: var(--border-active); }
+  .mode-btn.active-light { background: var(--purple-dim); color: var(--purple); border-color: rgba(183,148,244,0.5); }
+  .layout { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 97px); }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; overflow-y: auto; }
+  .main { padding: 1.5rem 2rem; display: flex; flex-direction: column; gap: 1.25rem; }
+  .section-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.75rem; font-family: var(--mono); }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: var(--text-muted); }
+  input[type=number], select { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 14px; padding: 8px 10px; width: 100%; outline: none; transition: border-color 0.15s; font-family: var(--mono); }
+  input[type=number]:focus, select:focus { border-color: var(--border-active); }
+  select option { background: #1e2330; }
+  .toggle-group { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .toggle-group button { flex: 1; padding: 7px 10px; background: transparent; border: none; color: var(--text-muted); font-size: 12px; cursor: pointer; transition: background 0.15s, color 0.15s; font-family: inherit; }
+  .toggle-group button.active { background: var(--accent-dim); color: var(--accent); }
+  .toggle-group button + button { border-left: 1px solid var(--border); }
+  .divider { border: none; border-top: 1px solid var(--border); }
+  .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .result-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
+  .metric .mlabel { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-family: var(--mono); letter-spacing: 0.05em; }
+  .metric .mval { font-size: 26px; font-weight: 600; font-family: var(--mono); color: var(--text); line-height: 1.2; }
+  .metric .msub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .rec-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 1.5rem; }
+  .rec-card .big { font-size: 48px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+  .rec-card .info { flex: 1; }
+  .rec-card .info h2 { font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
+  .rec-card .info p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+  .badge { display: inline-flex; align-items: center; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-family: var(--mono); font-weight: 500; gap: 4px; }
+  .badge-ok { background: var(--green-dim); color: var(--green); }
+  .badge-warn { background: var(--amber-dim); color: var(--amber); }
+  .badge-fail { background: var(--red-dim); color: var(--red); }
+  .badge-info { background: var(--purple-dim); color: var(--purple); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { border-bottom: 1px solid var(--border); }
+  th { text-align: left; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); padding: 6px 10px; font-family: var(--mono); font-weight: 400; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+  tr.rec td { background: var(--accent-dim); color: var(--accent); }
+  tr.ok td { color: var(--green); }
+  tr.marginal td { color: var(--amber); }
+  .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .table-card-header { padding: 0.875rem 1.25rem; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot-green { background: var(--green); } .dot-amber { background: var(--amber); } .dot-red { background: var(--red); }
+  .note { font-size: 11px; color: var(--text-dim); padding: 0.75rem 1.25rem; border-top: 1px solid var(--border); font-family: var(--mono); }
+  .vd-bar-wrap { width: 80px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
+  .vd-bar { height: 100%; border-radius: 2px; }
+  .light-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .light-type-btn { padding: 8px 6px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 11px; cursor: pointer; font-family: inherit; text-align: center; transition: all 0.15s; }
+  .light-type-btn.active { background: var(--purple-dim); color: var(--purple); border-color: rgba(183,148,244,0.5); }
+  .info-box { background: var(--purple-dim); border: 1px solid rgba(183,148,244,0.2); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 12px; color: var(--purple); font-family: var(--mono); }
+  @media (max-width: 768px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: none; border-bottom: 1px solid var(--border); } .result-grid, .result-grid-4 { grid-template-columns: 1fr 1fr; } .rec-card .big { font-size: 36px; } }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CS</div>
+  <h1>Cable Sizer</h1>
+  <span>SWA · Y-CY · LAPP — Motor &amp; Lighting</span>
+</header>
+
+<div class="mode-bar">
+  <button class="mode-btn active-motor" id="btn-mode-motor" onclick="setMode('motor')">⚡ Motor / Power</button>
+  <button class="mode-btn" id="btn-mode-light" onclick="setMode('light')">💡 Lighting Circuit</button>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+
+    <!-- ===== MOTOR MODE SIDEBAR ===== -->
+    <div id="motor-sidebar">
+      <div>
+        <div class="section-label">FLC source</div>
+        <div class="toggle-group">
+          <button id="btn-np" class="active" onclick="setFlcMode('nameplate')">Nameplate</button>
+          <button id="btn-kw" onclick="setFlcMode('calc')">From kW</button>
+        </div>
+      </div>
+      <div id="np-fields" style="display:flex;flex-direction:column;gap:1rem;">
+        <div class="field"><label>Full load current (A)</label><input type="number" id="flc-direct" value="23.8" min="0.1" step="0.1" oninput="calc()"></div>
+      </div>
+      <div id="kw-fields" style="display:none;flex-direction:column;gap:1rem;">
+        <div class="field"><label>Motor power (kW)</label><input type="number" id="power" value="18.5" min="0.1" step="0.5" oninput="calc()"></div>
+        <div class="field"><label>Power factor</label><input type="number" id="pf" value="0.85" min="0.5" max="1" step="0.01" oninput="calc()"></div>
+        <div class="field"><label>Efficiency</label><input type="number" id="eff" value="0.92" min="0.5" max="1" step="0.01" oninput="calc()"></div>
+      </div>
+      <hr class="divider">
+      <div>
+        <div class="section-label">System</div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          <div class="field"><label>Supply voltage (V)</label><input type="number" id="voltage" value="600" min="24" max="1000" oninput="calc()"></div>
+          <div class="field"><label>Phases</label>
+            <div class="toggle-group">
+              <button id="btn-3ph" class="active" onclick="setPhase(3)">3-phase</button>
+              <button id="btn-1ph" onclick="setPhase(1)">1-phase / DC</button>
+            </div>
+          </div>
+          <div class="field"><label>Run length (m)</label><input type="number" id="length" value="110" min="1" max="5000" oninput="calc()"></div>
+        </div>
+      </div>
+      <hr class="divider">
+      <div>
+        <div class="section-label">Installation</div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          <div class="field"><label>Cable type</label>
+            <select id="cable-type" onchange="calc()">
+              <option value="SWA-Cu">SWA — copper</option>
+              <option value="SWA-Al">SWA — aluminium</option>
+              <option value="YCY-Cu" selected>Y-CY — copper</option>
+              <option value="YCY-Al">Y-CY — aluminium</option>
+              <option value="LAPP-Cu">LAPP Ölflex — copper</option>
+              <option value="LAPP-Al">LAPP Ölflex — aluminium</option>
+            </select>
+          </div>
+          <div class="field"><label>Installation method</label>
+            <select id="install" onchange="calc()">
+              <option value="1.0">Free air / open cable tray</option>
+              <option value="0.9">Conduit in free air</option>
+              <option value="0.8" selected>Conduit / enclosed / clipped</option>
+              <option value="0.65">Buried direct in ground</option>
+            </select>
+          </div>
+          <div class="field"><label>Starting method</label>
+            <select id="start" onchange="calc()">
+              <option value="1.0">Soft starter / VFD</option>
+              <option value="1.25" selected>Star-delta</option>
+              <option value="1.5">DOL (direct on line)</option>
+            </select>
+          </div>
+          <div class="field"><label>Max voltage drop</label>
+            <select id="vdlim" onchange="calc()">
+              <option value="5" selected>5% — BS 7671 standard</option>
+              <option value="3">3% — sensitive equipment</option>
+              <option value="8">8% — motor starting</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== LIGHTING MODE SIDEBAR ===== -->
+    <div id="light-sidebar" class="hidden">
+      <div>
+        <div class="section-label">Light type</div>
+        <div class="light-type-grid">
+          <button class="light-type-btn active" id="lt-led" onclick="setLightType('LED')">💡 LED<br><span style="font-size:10px;opacity:0.7">PF 0.95</span></button>
+          <button class="light-type-btn" id="lt-fluoro" onclick="setLightType('Fluorescent')">🔆 Fluorescent<br><span style="font-size:10px;opacity:0.7">PF 0.85</span></button>
+          <button class="light-type-btn" id="lt-hps" onclick="setLightType('HPS/HID')">☀️ HPS / HID<br><span style="font-size:10px;opacity:0.7">PF 0.85</span></button>
+          <button class="light-type-btn" id="lt-halogen" onclick="setLightType('Halogen')">🕯️ Halogen<br><span style="font-size:10px;opacity:0.7">PF 1.0</span></button>
+        </div>
+        <div class="info-box" id="light-info">LED — unity power factor driver, low inrush</div>
+      </div>
+      <hr class="divider">
+      <div>
+        <div class="section-label">Load</div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          <div class="field"><label>Number of luminaires</label><input type="number" id="l-qty" value="10" min="1" max="500" oninput="lcalc()"></div>
+          <div class="field"><label>Watts per luminaire (W)</label><input type="number" id="l-watts" value="50" min="1" max="2000" oninput="lcalc()"></div>
+          <div class="field"><label>Supply voltage (V)</label><input type="number" id="l-voltage" value="230" min="24" max="690" oninput="lcalc()"></div>
+          <div class="field"><label>Run length (m)</label><input type="number" id="l-length" value="100" min="1" max="5000" oninput="lcalc()"></div>
+        </div>
+      </div>
+      <hr class="divider">
+      <div>
+        <div class="section-label">Power factor override</div>
+        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+          <div class="toggle-group">
+            <button id="btn-pf-auto" class="active" onclick="setPFMode('auto')">Auto</button>
+            <button id="btn-pf-manual" onclick="setPFMode('manual')">Manual</button>
+          </div>
+          <div id="pf-manual-field" class="hidden">
+            <div class="field"><label>Custom power factor</label><input type="number" id="l-pf-manual" value="0.90" min="0.5" max="1.0" step="0.01" oninput="lcalc()"></div>
+          </div>
+        </div>
+      </div>
+      <hr class="divider">
+      <div>
+        <div class="section-label">Installation</div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+          <div class="field"><label>Cable type</label>
+            <select id="l-cable-type" onchange="lcalc()">
+              <option value="SWA-Cu">SWA — copper</option>
+              <option value="YCY-Cu" selected>Y-CY — copper</option>
+              <option value="LAPP-Cu">LAPP Ölflex — copper</option>
+            </select>
+          </div>
+          <div class="field"><label>Installation method</label>
+            <select id="l-install" onchange="lcalc()">
+              <option value="1.0">Free air / open cable tray</option>
+              <option value="0.9">Conduit in free air</option>
+              <option value="0.8" selected>Conduit / enclosed / clipped</option>
+              <option value="0.65">Buried in ground</option>
+            </select>
+          </div>
+          <div class="field"><label>Max voltage drop</label>
+            <select id="l-vdlim" onchange="lcalc()">
+              <option value="3" selected>3% — lighting (recommended)</option>
+              <option value="5">5% — BS 7671 standard</option>
+              <option value="6">6% — emergency lighting</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ===== MOTOR MODE MAIN ===== -->
+  <main class="main" id="motor-main">
+    <div class="result-grid">
+      <div class="metric"><div class="mlabel">Full load current</div><div class="mval" id="out-flc">—</div><div class="msub">amps</div></div>
+      <div class="metric"><div class="mlabel">Design current</div><div class="mval" id="out-design">—</div><div class="msub">with starting factor</div></div>
+      <div class="metric"><div class="mlabel">Ampacity required</div><div class="mval" id="out-needed">—</div><div class="msub">after derating</div></div>
+    </div>
+    <div class="rec-card">
+      <div class="big" id="rec-size">—</div>
+      <div class="info"><h2>Recommended cable size</h2><p id="rec-desc">—</p></div>
+      <div><span class="badge badge-ok" id="rec-badge">—</span></div>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header">
+        <span id="table-title">Cable reference</span>
+        <span><span class="dot dot-green"></span>passes both <span class="dot dot-amber" style="margin-left:8px;"></span>marginal <span class="dot dot-red" style="margin-left:8px;"></span>fails</span>
+      </div>
+      <table><thead><tr><th>Size mm²</th><th>Ampacity (derated)</th><th>mV/A/m</th><th>VD (V)</th><th>VD %</th><th>Status</th></tr></thead>
+      <tbody id="table-body"></tbody></table>
+      <div class="note">Ampacity at 40°C ambient, multi-core. VD per BS 7671 mV/A/m method. Verify against manufacturer datasheet.</div>
+    </div>
+  </main>
+
+  <!-- ===== LIGHTING MODE MAIN ===== -->
+  <main class="main hidden" id="light-main">
+    <div class="result-grid-4">
+      <div class="metric"><div class="mlabel">Total load (W)</div><div class="mval" id="l-total-w">—</div><div class="msub">watts</div></div>
+      <div class="metric"><div class="mlabel">Total VA</div><div class="mval" id="l-total-va">—</div><div class="msub">volt-amperes</div></div>
+      <div class="metric"><div class="mlabel">Design current</div><div class="mval" id="l-design-current">—</div><div class="msub">amps (×1.25)</div></div>
+      <div class="metric"><div class="mlabel">Power factor</div><div class="mval" id="l-pf-display">—</div><div class="msub">assumed</div></div>
+    </div>
+    <div class="rec-card">
+      <div class="big" id="l-rec-size">—</div>
+      <div class="info"><h2>Recommended cable size</h2><p id="l-rec-desc">—</p></div>
+      <div><span class="badge badge-info" id="l-rec-badge">—</span></div>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header">
+        <span id="l-table-title">Lighting cable reference</span>
+        <span><span class="dot dot-green"></span>passes both <span class="dot dot-amber" style="margin-left:8px;"></span>marginal <span class="dot dot-red" style="margin-left:8px;"></span>fails</span>
+      </div>
+      <table><thead><tr><th>Size mm²</th><th>Ampacity (derated)</th><th>mV/A/m</th><th>VD (V)</th><th>VD %</th><th>Status</th></tr></thead>
+      <tbody id="l-table-body"></tbody></table>
+      <div class="note">Lighting circuits: 3% VD recommended. VD per BS 7671 mV/A/m method. Design current = total current × 1.25. Single phase assumed.</div>
+    </div>
+  </main>
+</div>
+
+<script>
+// mV/A/m values per BS 7671 Table 4D5 (copper) and 4E5 (aluminium)
+// Single phase: use mV/A/m directly. Three phase: multiply by √3/2 = 0.866
+// r = mV/A/m value
+const CABLES = {
+  'SWA-Cu':  [{s:1.5,amp:18,r:29},{s:2.5,amp:24,r:18},{s:4,amp:32,r:11},{s:6,amp:41,r:7.3},{s:10,amp:57,r:4.4},{s:16,amp:76,r:2.8},{s:25,amp:99,r:1.75},{s:35,amp:119,r:1.25},{s:50,amp:144,r:0.93},{s:70,amp:184,r:0.63},{s:95,amp:223,r:0.47},{s:120,amp:259,r:0.38},{s:150,amp:294,r:0.30},{s:185,amp:336,r:0.25},{s:240,amp:392,r:0.19}],
+  'SWA-Al':  [{s:16,amp:59,r:4.6},{s:25,amp:77,r:2.9},{s:35,amp:93,r:2.1},{s:50,amp:112,r:1.55},{s:70,amp:143,r:1.10},{s:95,amp:174,r:0.80},{s:120,amp:201,r:0.65},{s:150,amp:230,r:0.52},{s:185,amp:263,r:0.41},{s:240,amp:307,r:0.32}],
+  'YCY-Cu':  [{s:0.5,amp:6,r:93},{s:0.75,amp:9,r:62},{s:1.0,amp:11,r:44},{s:1.5,amp:14,r:29},{s:2.5,amp:18,r:18},{s:4,amp:24,r:11},{s:6,amp:30,r:7.3},{s:10,amp:41,r:4.4},{s:16,amp:57,r:2.8},{s:25,amp:75,r:1.75},{s:35,amp:92,r:1.25},{s:50,amp:112,r:0.93},{s:70,amp:143,r:0.63}],
+  'YCY-Al':  [{s:4,amp:18,r:18.1},{s:6,amp:23,r:12.1},{s:10,amp:32,r:7.3},{s:16,amp:44,r:4.6},{s:25,amp:58,r:2.9},{s:35,amp:71,r:2.1},{s:50,amp:87,r:1.55},{s:70,amp:111,r:1.10}],
+  'LAPP-Cu': [{s:0.75,amp:8,r:62},{s:1.0,amp:10,r:44},{s:1.5,amp:14,r:29},{s:2.5,amp:19,r:18},{s:4,amp:25,r:11},{s:6,amp:32,r:7.3},{s:10,amp:44,r:4.4},{s:16,amp:59,r:2.8},{s:25,amp:77,r:1.75},{s:35,amp:96,r:1.25},{s:50,amp:116,r:0.93},{s:70,amp:149,r:0.63},{s:95,amp:181,r:0.47},{s:120,amp:210,r:0.38}],
+  'LAPP-Al': [{s:16,amp:46,r:4.6},{s:25,amp:60,r:2.9},{s:35,amp:73,r:2.1},{s:50,amp:89,r:1.55},{s:70,amp:114,r:1.10},{s:95,amp:138,r:0.80},{s:120,amp:160,r:0.65}],
+};
+
+const LIGHT_TYPES = {
+  'LED':         { pf: 0.95, infoText: 'LED — high efficiency driver, low inrush, PF 0.95' },
+  'Fluorescent': { pf: 0.85, infoText: 'Fluorescent — electronic ballast, PF 0.85, check inrush' },
+  'HPS/HID':     { pf: 0.85, infoText: 'HPS/HID — magnetic ballast, PF 0.85, high inrush on start' },
+  'Halogen':     { pf: 1.00, infoText: 'Halogen — resistive load, unity PF, high inrush on cold start' },
+};
+
+let appMode   = 'motor';
+let flcMode   = 'nameplate';
+let phases    = 3;
+let lightType = 'LED';
+let pfMode    = 'auto';
+
+function setPFMode(m) {
+  pfMode = m;
+  document.getElementById('btn-pf-auto').classList.toggle('active', m === 'auto');
+  document.getElementById('btn-pf-manual').classList.toggle('active', m === 'manual');
+  document.getElementById('pf-manual-field').classList.toggle('hidden', m === 'auto');
+  lcalc();
+}
+
+function setMode(m) {
+  appMode = m;
+  document.getElementById('motor-sidebar').classList.toggle('hidden', m !== 'motor');
+  document.getElementById('light-sidebar').classList.toggle('hidden', m !== 'light');
+  document.getElementById('motor-main').classList.toggle('hidden', m !== 'motor');
+  document.getElementById('light-main').classList.toggle('hidden', m !== 'light');
+  document.getElementById('btn-mode-motor').className = 'mode-btn' + (m === 'motor' ? ' active-motor' : '');
+  document.getElementById('btn-mode-light').className = 'mode-btn' + (m === 'light' ? ' active-light' : '');
+  if (m === 'light') lcalc(); else calc();
+}
+
+function setLightType(t) {
+  lightType = t;
+  ['LED','Fluorescent','HPS/HID','Halogen'].forEach(x => {
+    const id = 'lt-' + x.toLowerCase().replace('/','').replace('-','');
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('active', x === t);
+  });
+  document.getElementById('lt-led').classList.toggle('active', t === 'LED');
+  document.getElementById('lt-fluoro').classList.toggle('active', t === 'Fluorescent');
+  document.getElementById('lt-hps').classList.toggle('active', t === 'HPS/HID');
+  document.getElementById('lt-halogen').classList.toggle('active', t === 'Halogen');
+  document.getElementById('light-info').textContent = LIGHT_TYPES[t].infoText;
+  lcalc();
+}
+
+function setFlcMode(m) {
+  flcMode = m;
+  document.getElementById('np-fields').style.display = m === 'nameplate' ? 'flex' : 'none';
+  document.getElementById('kw-fields').style.display = m === 'calc' ? 'flex' : 'none';
+  document.getElementById('np-fields').style.flexDirection = 'column';
+  document.getElementById('kw-fields').style.flexDirection = 'column';
+  document.getElementById('btn-np').classList.toggle('active', m === 'nameplate');
+  document.getElementById('btn-kw').classList.toggle('active', m === 'calc');
+  calc();
+}
+
+function setPhase(p) {
+  phases = p;
+  document.getElementById('btn-3ph').classList.toggle('active', p === 3);
+  document.getElementById('btn-1ph').classList.toggle('active', p === 1);
+  calc();
+}
+
+// VD formula per BS 7671: VD(V) = mV/A/m × I × L / 1000
+// For 3-phase multiply by 0.866 (√3/2)
+// For 1-phase/DC use directly
+function calcVD(r, L, I, vdf) {
+  return r * I * L / 1000 * (vdf === Math.sqrt(3) ? 0.866 : 1);
+}
+
+function buildTable(tbody, cables, deRate, design, L, flc, V, vdLimP, vdf) {
+  let ampIdx = -1, vdIdx = -1;
+  const vdAllowed = V * vdLimP;
+  cables.forEach((c, i) => {
+    if (c.amp * deRate >= design && ampIdx === -1) ampIdx = i;
+    const vd = calcVD(c.r, L, flc, vdf);
+    if (vd <= vdAllowed && vdIdx === -1) vdIdx = i;
+  });
+  const recIdx = ampIdx === -1 && vdIdx === -1 ? -1 : Math.max(ampIdx < 0 ? 999 : ampIdx, vdIdx < 0 ? 999 : vdIdx);
+  tbody.innerHTML = '';
+  cables.forEach((c, i) => {
+    const derated = c.amp * deRate;
+    const vd = calcVD(c.r, L, flc, vdf);
+    const vdPct = vd / V * 100;
+    const ampOk = derated >= design, vdOk = vdPct <= vdLimP * 100;
+    const isRec = i === recIdx;
+    const tr = document.createElement('tr');
+    if (isRec) tr.className = 'rec';
+    else if (ampOk && vdOk) tr.className = 'ok';
+    else if (ampOk || vdOk) tr.className = 'marginal';
+    const barW = Math.min(vdPct / (vdLimP * 100) * 100, 100).toFixed(0);
+    const barClr = vdOk ? 'var(--green)' : 'var(--red)';
+    const status = isRec ? '← recommended' : (ampOk && vdOk ? 'pass' : (!ampOk && !vdOk ? 'fail amp + VD' : (!ampOk ? 'fail ampacity' : 'fail VD')));
+    tr.innerHTML = '<td>' + c.s + '</td><td>' + derated.toFixed(1) + ' A</td><td>' + c.r + ' mV/A/m</td><td>' + vd.toFixed(2) + '</td><td>' + vdPct.toFixed(1) + '%<span class="vd-bar-wrap"><span class="vd-bar" style="width:' + barW + '%;background:' + barClr + '"></span></span></td><td>' + status + '</td>';
+    tbody.appendChild(tr);
+  });
+  return { ampIdx, vdIdx, recIdx };
+}
+
+function calc() {
+  const V = parseFloat(document.getElementById('voltage').value) || 600;
+  const L = parseFloat(document.getElementById('length').value) || 110;
+  const deRate = parseFloat(document.getElementById('install').value);
+  const startF = parseFloat(document.getElementById('start').value);
+  const vdLimP = parseFloat(document.getElementById('vdlim').value) / 100;
+  const ctype = document.getElementById('cable-type').value;
+  let flc;
+  if (flcMode === 'nameplate') {
+    flc = parseFloat(document.getElementById('flc-direct').value) || 23.8;
+  } else {
+    const P = parseFloat(document.getElementById('power').value) || 18.5;
+    const pf = parseFloat(document.getElementById('pf').value) || 0.85;
+    const eff = parseFloat(document.getElementById('eff').value) || 0.92;
+    const denom = phases === 3 ? (Math.sqrt(3) * V * pf * eff) : (V * pf * eff);
+    flc = (P * 1000) / denom;
+  }
+  const design = flc * startF;
+  const needed = design / deRate;
+  const vdf = phases === 3 ? Math.sqrt(3) : 1; // mV/A/m: 3ph uses √3 factor, 1ph already includes both conductors
+  document.getElementById('out-flc').textContent = flc.toFixed(1);
+  document.getElementById('out-design').textContent = design.toFixed(1);
+  document.getElementById('out-needed').textContent = needed.toFixed(1);
+  const cables = CABLES[ctype] || [];
+  const { ampIdx, vdIdx, recIdx } = buildTable(document.getElementById('table-body'), cables, deRate, design, L, flc, V, vdLimP, vdf);
+  const ampSizeStr = ampIdx >= 0 ? cables[ampIdx].s + ' mm²' : 'exceeds range';
+  const vdSizeStr = vdIdx >= 0 ? cables[vdIdx].s + ' mm²' : 'exceeds range';
+  const rec = recIdx >= 0 && recIdx < cables.length ? cables[recIdx] : null;
+  if (rec) {
+    const vd = vdf * rec.r / 1000 * L * flc;
+    const vdPct = vd / V * 100;
+    const ok = vdPct <= vdLimP * 100;
+    document.getElementById('rec-size').textContent = rec.s + ' mm²';
+    document.getElementById('rec-size').style.color = ok ? 'var(--green)' : 'var(--amber)';
+    document.getElementById('rec-desc').textContent = 'Ampacity min: ' + ampSizeStr + '  ·  VD min: ' + vdSizeStr + '  ·  VD at rec size: ' + vd.toFixed(2) + ' V (' + vdPct.toFixed(1) + '%)';
+    const badge = document.getElementById('rec-badge');
+    badge.textContent = ok ? '✓ within limits' : '⚠ check VD';
+    badge.className = 'badge ' + (ok ? 'badge-ok' : 'badge-warn');
+  } else {
+    document.getElementById('rec-size').textContent = 'N/A';
+    document.getElementById('rec-desc').textContent = 'Cable range exceeded — consult engineer';
+    document.getElementById('rec-badge').textContent = '! out of range';
+    document.getElementById('rec-badge').className = 'badge badge-fail';
+  }
+  const cLabel = document.getElementById('cable-type');
+  document.getElementById('table-title').textContent = cLabel.options[cLabel.selectedIndex].text + '  ·  ' + (phases === 3 ? '3-phase' : '1-phase/DC') + '  ·  ' + V + ' V  ·  ' + L + ' m';
+}
+
+function lcalc() {
+  const qty = parseFloat(document.getElementById('l-qty').value) || 10;
+  const watts = parseFloat(document.getElementById('l-watts').value) || 50;
+  const V = parseFloat(document.getElementById('l-voltage').value) || 230;
+  const L = parseFloat(document.getElementById('l-length').value) || 100;
+  const deRate = parseFloat(document.getElementById('l-install').value);
+  const vdLimP = parseFloat(document.getElementById('l-vdlim').value) / 100;
+  const ctype = document.getElementById('l-cable-type').value;
+  const lt = LIGHT_TYPES[lightType];
+  const pf = pfMode === 'manual' ? (parseFloat(document.getElementById('l-pf-manual').value) || lt.pf) : lt.pf;
+  const totalW = qty * watts;
+  const totalVA = totalW / pf;
+  const flc = totalVA / V;
+  const design = flc * 1.25; // BS7671 lighting circuit factor
+  const needed = design / deRate;
+  const vdf = 1; // single phase lighting — mV/A/m method uses 1 (factor already accounts for both conductors)
+
+  document.getElementById('l-total-w').textContent = totalW.toFixed(0);
+  document.getElementById('l-total-va').textContent = totalVA.toFixed(0);
+  document.getElementById('l-design-current').textContent = design.toFixed(2);
+  document.getElementById('l-pf-display').textContent = pf.toFixed(2);
+
+  const cables = CABLES[ctype] || [];
+  const { ampIdx, vdIdx, recIdx } = buildTable(document.getElementById('l-table-body'), cables, deRate, design, L, flc, V, vdLimP, vdf);
+  const ampSizeStr = ampIdx >= 0 ? cables[ampIdx].s + ' mm²' : 'exceeds range';
+  const vdSizeStr = vdIdx >= 0 ? cables[vdIdx].s + ' mm²' : 'exceeds range';
+  const rec = recIdx >= 0 && recIdx < cables.length ? cables[recIdx] : null;
+  if (rec) {
+    const vd = vdf * rec.r / 1000 * L * flc;
+    const vdPct = vd / V * 100;
+    const ok = vdPct <= vdLimP * 100;
+    document.getElementById('l-rec-size').textContent = rec.s + ' mm²';
+    document.getElementById('l-rec-size').style.color = ok ? 'var(--green)' : 'var(--purple)';
+    document.getElementById('l-rec-desc').textContent = lightType + '  ·  ' + qty + ' × ' + watts + 'W  ·  Ampacity min: ' + ampSizeStr + '  ·  VD min: ' + vdSizeStr + '  ·  VD at rec: ' + vd.toFixed(2) + ' V (' + vdPct.toFixed(1) + '%)';
+    const badge = document.getElementById('l-rec-badge');
+    badge.textContent = ok ? '✓ within limits' : '⚠ check VD';
+    badge.className = 'badge ' + (ok ? 'badge-ok' : 'badge-warn');
+  } else {
+    document.getElementById('l-rec-size').textContent = 'N/A';
+    document.getElementById('l-rec-desc').textContent = 'Cable range exceeded — consult engineer';
+    document.getElementById('l-rec-badge').textContent = '! out of range';
+    document.getElementById('l-rec-badge').className = 'badge badge-fail';
+  }
+  const cLabel = document.getElementById('l-cable-type');
+  document.getElementById('l-table-title').textContent = lightType + '  ·  ' + cLabel.options[cLabel.selectedIndex].text + '  ·  ' + V + ' V  ·  ' + L + ' m  ·  ' + qty + ' × ' + watts + 'W';
+}
+
+// init
+document.getElementById('np-fields').style.display = 'flex';
+document.getElementById('np-fields').style.flexDirection = 'column';
+document.getElementById('kw-fields').style.display = 'none';
+calc();
+lcalc();
+</script>
+</body>
+</html>
